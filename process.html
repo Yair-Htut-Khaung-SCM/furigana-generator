@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Furigana Generator Processor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@400;600;700&family=Noto+Serif+JP:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body class="process-page">
+    <main class="process-layout">
+      <header class="toolbar">
+        <div class="toolbar-group">
+          <a href="./index.html" class="btn icon-btn" title="Back to input" aria-label="Back to input">
+            <span aria-hidden="true">&#x2190;</span>
+            <span class="sr-only">Back to input</span>
+          </a>
+          <button id="playToggleBtn" class="btn icon-btn" type="button" title="Play full script" aria-label="Play full script" aria-pressed="false">
+            <span aria-hidden="true">&#x25B6;</span>
+            <span class="sr-only">Play full script</span>
+          </button>
+          <button id="exportDocxBtn" class="btn icon-btn" type="button" title="Export file" aria-label="Export file">
+            <span aria-hidden="true">&#x2913;</span>
+            <span class="sr-only">Export file</span>
+          </button>
+          <select id="levelFilter" class="level-select" aria-label="Select JLPT Kanji level">
+            <option value="all">All</option>
+            <option value="n4">N4</option>
+            <option value="n3">N3</option>
+            <option value="n2">N2</option>
+            <option value="n1">N1</option>
+          </select>
+        </div>
+      </header>
+
+      <section class="panel process-panel">
+        <div class="output-head">
+          <div>
+            <h2>Furigana Generator / Process View</h2>
+            <p>Click any Play button or ruby word for pronunciation. JLPT filter applies to furigana output.</p>
+          </div>
+          <p id="status" class="status">Ready.</p>
+        </div>
+
+        <div id="furiganaOutput" class="output output-full" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <div id="exportModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="exportModalTitle">
+      <div class="modal-card">
+        <h3 id="exportModalTitle" class="modal-title">Choose Export Format</h3>
+        <div class="modal-options">
+          <button type="button" class="btn modal-option" data-export-type="pdf">PDF</button>
+          <button type="button" class="btn modal-option" data-export-type="docx">DOCX</button>
+          <button type="button" class="btn modal-option" data-export-type="image">Image</button>
+        </div>
+        <button id="closeExportModalBtn" type="button" class="btn modal-cancel">Cancel</button>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/build/kuromoji.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="./process.js"></script>
+  </body>
+</html>

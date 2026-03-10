@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Furigana Generator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@400;600;700&family=Noto+Serif+JP:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body class="input-page">
+    <main class="shell input-shell">
+      <header class="hero">
+        <p class="eyebrow">Page 1 / Input</p>
+        <h1>Furigana Generator</h1>
+        <p class="lead">
+          Paste your full Japanese script, pick a JLPT Kanji level filter, then process and export as DOCX, PDF, or image.
+        </p>
+      </header>
+
+      <section class="panel input-panel input-panel-full">
+        <label for="sourceText">Japanese Script</label>
+        <textarea
+          id="sourceText"
+          class="source-input"
+          placeholder="Paste your full Japanese script here..."
+          spellcheck="false"
+        ></textarea>
+
+        <div class="controls">
+          <label for="kanjiLevelSelect" class="level-label">Kanji Level</label>
+          <select id="kanjiLevelSelect" class="level-select" aria-label="Select JLPT Kanji level">
+            <option value="all">All</option>
+            <option value="n4">N4</option>
+            <option value="n3">N3</option>
+            <option value="n2">N2</option>
+            <option value="n1">N1</option>
+          </select>
+          <button id="openProcessBtn" class="btn icon-btn btn-solid" type="button" title="Open process page" aria-label="Open process page">
+            <span aria-hidden="true">&#x2192;</span>
+            <span class="sr-only">Open process page</span>
+          </button>
+          <button id="clearBtn" class="btn icon-btn" type="button" title="Clear text" aria-label="Clear text">
+            <span aria-hidden="true">&#x2715;</span>
+            <span class="sr-only">Clear text</span>
+          </button>
+        </div>
+
+        <p id="status" class="status">Ready. Auto-save is enabled.</p>
+      </section>
+    </main>
+
+    <script src="./input.js"></script>
+  </body>
+</html>

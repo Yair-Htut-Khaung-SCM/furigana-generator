@@ -1,0 +1,43 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.16",
+  "version": "1.0.0",
+  "id": "8b0f3f2d-1a9d-4f84-8650-f9ab7887f65d",
+  "packageName": "com.example.furigana.generator",
+  "developer": {
+    "name": "Your Company",
+    "websiteUrl": "https://YOUR_GITHUB_USERNAME.github.io/furigana-generator/",
+    "privacyUrl": "https://YOUR_GITHUB_USERNAME.github.io/furigana-generator/privacy.html",
+    "termsOfUseUrl": "https://YOUR_GITHUB_USERNAME.github.io/furigana-generator/terms.html"
+  },
+  "name": {
+    "short": "FuriganaGen",
+    "full": "Furigana Generator"
+  },
+  "description": {
+    "short": "Generate furigana and export scripts",
+    "full": "Generate Japanese furigana by JLPT level and export your script to DOCX, PDF, or image."
+  },
+  "icons": {
+    "outline": "outline.png",
+    "color": "color.png"
+  },
+  "accentColor": "#62615B",
+  "staticTabs": [
+    {
+      "entityId": "furigana-generator-home",
+      "name": "Furigana Generator",
+      "contentUrl": "https://YOUR_GITHUB_USERNAME.github.io/furigana-generator/index.html",
+      "websiteUrl": "https://YOUR_GITHUB_USERNAME.github.io/furigana-generator/index.html",
+      "scopes": [
+        "personal"
+      ]
+    }
+  ],
+  "permissions": [
+    "identity"
+  ],
+  "validDomains": [
+    "YOUR_GITHUB_USERNAME.github.io"
+  ]
+}
