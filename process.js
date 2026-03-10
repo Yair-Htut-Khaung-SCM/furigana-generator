@@ -44,6 +44,7 @@ let playbackSessionId = 0;
 let activeReadingLineIndex = null;
 let activeWordLineIndex = null;
 let activeWordTokenIndex = null;
+let activeWordFallbackTimer = null;
 let isExporting = false;
 let isProcessing = false;
 const jlptKanjiCache = new Map();
@@ -90,6 +91,44 @@ function clearWordHighlight() {
 
   activeWordLineIndex = null;
   activeWordTokenIndex = null;
+}
+
+function stopWordFallback() {
+  if (activeWordFallbackTimer !== null) {
+    window.clearInterval(activeWordFallbackTimer);
+    activeWordFallbackTimer = null;
+  }
+}
+
+function estimateSpeechDurationMs(text, rate) {
+  const charCount = Math.max(1, [...text].length);
+  const safeRate = Math.max(0.3, rate || 1);
+  const baseMsPerChar = 155;
+  return Math.max(900, (charCount * baseMsPerChar) / safeRate);
+}
+
+function startWordFallback(session, lineIndex, text, rate) {
+  if (lineIndex === null) {
+    return;
+  }
+
+  stopWordFallback();
+
+  const startedAt = performance.now();
+  const totalChars = Math.max(1, [...text].length);
+  const duration = estimateSpeechDurationMs(text, rate);
+
+  activeWordFallbackTimer = window.setInterval(() => {
+    if (session !== playbackSessionId) {
+      stopWordFallback();
+      return;
+    }
+
+    const elapsed = performance.now() - startedAt;
+    const ratio = Math.min(0.98, elapsed / duration);
+    const charIndex = Math.max(0, Math.floor(ratio * totalChars));
+    highlightWordByChar(lineIndex, charIndex);
+  }, 100);
 }
 
 function highlightWordToken(lineIndex, tokenIndex) {
@@ -151,6 +190,7 @@ function highlightFirstWord(lineIndex) {
 }
 
 function clearReadingHighlight() {
+  stopWordFallback();
   clearWordHighlight();
 
   if (activeReadingLineIndex === null) {
@@ -184,6 +224,7 @@ function cancelSpeechAndResetPlayback(clearHighlight = true) {
 
   playbackSessionId += 1;
   resetFullPlayback();
+  stopWordFallback();
 
   if (clearHighlight) {
     clearReadingHighlight();
@@ -502,6 +543,7 @@ function speakLineOrWord(text, lineIndex = null) {
 
   cancelSpeechAndResetPlayback(lineIndex === null);
   const session = playbackSessionId;
+  let boundarySeen = false;
 
   const utterance = buildUtterance(cleanText);
   utterance.onstart = () => {
@@ -512,6 +554,7 @@ function speakLineOrWord(text, lineIndex = null) {
     if (lineIndex !== null) {
       highlightReadingLine(lineIndex);
       highlightFirstWord(lineIndex);
+      startWordFallback(session, lineIndex, cleanText, utterance.rate);
     }
 
     setStatus("Playing Japanese voice...");
@@ -523,6 +566,11 @@ function speakLineOrWord(text, lineIndex = null) {
 
     if (typeof event.charIndex !== "number") {
       return;
+    }
+
+    if (!boundarySeen) {
+      boundarySeen = true;
+      stopWordFallback();
     }
 
     highlightWordByChar(lineIndex, event.charIndex);
@@ -574,6 +622,7 @@ function playFullQueueFrom(position, session) {
 
   const item = fullPlaybackQueue[position];
   const utterance = buildUtterance(item.text);
+  let boundarySeen = false;
 
   utterance.onstart = () => {
     if (session !== playbackSessionId) {
@@ -584,6 +633,7 @@ function playFullQueueFrom(position, session) {
     setPlayToggleVisual("playing");
     highlightReadingLine(item.lineIndex);
     highlightFirstWord(item.lineIndex);
+    startWordFallback(session, item.lineIndex, item.text, utterance.rate);
     setStatus(`Playing line ${position + 1}/${fullPlaybackQueue.length}...`);
   };
 
@@ -596,6 +646,11 @@ function playFullQueueFrom(position, session) {
       return;
     }
 
+    if (!boundarySeen) {
+      boundarySeen = true;
+      stopWordFallback();
+    }
+
     highlightWordByChar(item.lineIndex, event.charIndex);
   };
 
@@ -604,6 +659,7 @@ function playFullQueueFrom(position, session) {
       return;
     }
 
+    stopWordFallback();
     playFullQueueFrom(position + 1, session);
   };
 

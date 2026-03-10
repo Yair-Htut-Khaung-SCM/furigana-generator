@@ -105,14 +105,36 @@ label {
   border: 1px solid var(--ink-strong);
   border-radius: 8px;
   padding: 0 0.6rem;
-  background: var(--surface);
-  color: var(--ink);
+  background: var(--ink-strong);
+  color: #f8f8f6;
   font: inherit;
+  color-scheme: dark;
 }
 
 .level-select:focus {
   outline: 2px solid var(--ink-strong);
   outline-offset: 1px;
+}
+
+.level-select:hover {
+  background: #252520;
+  color: #ffffff;
+}
+
+.level-select option {
+  background: #1f1f1b;
+  color: #f8f8f6;
+}
+
+.level-select option:checked {
+  background: #34342f;
+  color: #ffffff;
+}
+
+.level-select option:hover,
+.level-select option:focus {
+  background: #34342f;
+  color: #ffffff;
 }
 
 .btn {
@@ -214,6 +236,7 @@ label {
   display: grid;
   grid-template-rows: auto 1fr;
   min-height: 0;
+  margin-bottom: 25px;
 }
 
 .output-head {
