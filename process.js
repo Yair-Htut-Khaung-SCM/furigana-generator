@@ -7,7 +7,11 @@ const SPEED_RATE_MAP = {
   normal: 1.0,
   fast: 1.45
 };
-const KUROMOJI_DIC = "https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/";
+const KUROMOJI_DIC_CANDIDATES = [
+  "./dict/",
+  "https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/",
+  "https://unpkg.com/kuromoji@0.1.2/dict/"
+];
 const JLPT_KANJI_URL = {
   n4: "https://unpkg.com/kanji-data@1.1.0/data/lists/jlpt-4.json",
   n3: "https://unpkg.com/kanji-data@1.1.0/data/lists/jlpt-3.json",
@@ -469,17 +473,32 @@ function buildTokenizer() {
 
   setStatus("Loading Japanese dictionary (first time only)...");
 
-  tokenizerPromise = new Promise((resolve, reject) => {
-    kuromoji.builder({ dicPath: KUROMOJI_DIC }).build((error, newTokenizer) => {
-      if (error) {
-        reject(error);
-        return;
-      }
+  tokenizerPromise = (async () => {
+    let lastError = null;
 
-      tokenizer = newTokenizer;
-      resolve(tokenizer);
-    });
-  });
+    for (const dicPath of KUROMOJI_DIC_CANDIDATES) {
+      setStatus(`Loading dictionary from ${dicPath}`);
+
+      try {
+        const loadedTokenizer = await new Promise((resolve, reject) => {
+          kuromoji.builder({ dicPath }).build((error, newTokenizer) => {
+            if (error) {
+              reject(error);
+              return;
+            }
+            resolve(newTokenizer);
+          });
+        });
+
+        tokenizer = loadedTokenizer;
+        return tokenizer;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw lastError || new Error("Could not load kuromoji dictionary.");
+  })();
 
   return tokenizerPromise;
 }
