@@ -233,7 +233,8 @@ function getLevelRangeLabel(level) {
 }
 
 function getStoredVoiceUri() {
-  return localStorage.getItem(VOICE_KEY) || "auto";
+  const stored = localStorage.getItem(VOICE_KEY) || "";
+  return stored === "auto" ? "" : stored;
 }
 
 function setStoredVoiceUri(voiceUri) {
@@ -285,6 +286,10 @@ function rankVoice(voice) {
   return score;
 }
 
+function findHarukaVoice(voices) {
+  return voices.find((voice) => (voice.name || "").toLowerCase().includes("haruka")) || null;
+}
+
 function populateVoiceSelect() {
   const japaneseVoices = getJapaneseVoices();
   const sorted = [...japaneseVoices].sort((a, b) => rankVoice(b) - rankVoice(a));
@@ -292,10 +297,13 @@ function populateVoiceSelect() {
 
   voiceSelect.innerHTML = "";
 
-  const autoOption = document.createElement("option");
-  autoOption.value = "auto";
-  autoOption.textContent = "Voice: Auto";
-  voiceSelect.appendChild(autoOption);
+  if (sorted.length === 0) {
+    const emptyOption = document.createElement("option");
+    emptyOption.value = "";
+    emptyOption.textContent = "No Japanese voice";
+    voiceSelect.appendChild(emptyOption);
+    return;
+  }
 
   for (const voice of sorted) {
     const option = document.createElement("option");
@@ -304,12 +312,14 @@ function populateVoiceSelect() {
     voiceSelect.appendChild(option);
   }
 
-  if (preferred !== "auto" && sorted.some((voice) => voice.voiceURI === preferred)) {
+  if (preferred && sorted.some((voice) => voice.voiceURI === preferred)) {
     voiceSelect.value = preferred;
     return;
   }
 
-  voiceSelect.value = "auto";
+  const haruka = findHarukaVoice(sorted);
+  voiceSelect.value = haruka ? haruka.voiceURI : sorted[0].voiceURI;
+  setStoredVoiceUri(voiceSelect.value);
 }
 
 function loadVoices() {
@@ -327,8 +337,8 @@ function pickJapaneseVoice() {
     return null;
   }
 
-  const selectedUri = voiceSelect.value || "auto";
-  if (selectedUri !== "auto") {
+  const selectedUri = voiceSelect.value || "";
+  if (selectedUri) {
     const chosenVoice = japaneseVoices.find((voice) => voice.voiceURI === selectedUri);
     if (chosenVoice) {
       return chosenVoice;
@@ -336,7 +346,7 @@ function pickJapaneseVoice() {
   }
 
   const sorted = [...japaneseVoices].sort((a, b) => rankVoice(b) - rankVoice(a));
-  return sorted[0];
+  return findHarukaVoice(sorted) || sorted[0];
 }
 
 function buildUtterance(text) {
@@ -859,7 +869,7 @@ levelFilter.addEventListener("change", async () => {
 });
 
 voiceSelect.addEventListener("change", () => {
-  setStoredVoiceUri(voiceSelect.value || "auto");
+  setStoredVoiceUri(voiceSelect.value || "");
 
   if (!("speechSynthesis" in window)) {
     return;
@@ -871,11 +881,6 @@ voiceSelect.addEventListener("change", () => {
   const pickedVoice = pickJapaneseVoice();
   if (!pickedVoice) {
     setStatus("No Japanese voice found in this browser.", true);
-    return;
-  }
-
-  if (voiceSelect.value === "auto") {
-    setStatus(`Voice auto-selected: ${pickedVoice.name}. Press play to start.`);
     return;
   }
 
