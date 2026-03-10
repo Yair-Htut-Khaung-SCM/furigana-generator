@@ -1072,7 +1072,7 @@ async function exportImage() {
       throw new Error("Could not create image file.");
     }
 
-    downloadBlob(imageBlob, "Announcer Script_JP_furigana.png");
+    downloadBlob(imageBlob, "JP_furigana.png");
     setStatus("Image exported.");
   } catch (error) {
     setStatus(`Image export failed: ${error.message || error}`, true);
@@ -1128,7 +1128,7 @@ async function exportPdf() {
       pageIndex += 1;
     }
 
-    pdf.save("Announcer Script_JP_furigana.pdf");
+    pdf.save("JP_furigana.pdf");
     setStatus("PDF exported.");
   } catch (error) {
     setStatus(`PDF export failed: ${error.message || error}`, true);
@@ -1157,7 +1157,7 @@ async function exportDocx() {
     zip.folder("word").file("document.xml", buildDocumentXml());
 
     const blob = await zip.generateAsync({ type: "blob" });
-    downloadBlob(blob, "Announcer Script_JP_furigana.docx");
+    downloadBlob(blob, "JP_furigana.docx");
 
     setStatus("DOCX exported with top furigana.");
   } catch (error) {
