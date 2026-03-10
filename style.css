@@ -286,6 +286,12 @@ label {
   border-bottom: 1px dashed var(--line-soft);
   padding: 0 0 0.35rem;
   margin-bottom: 0.35rem;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.line-row.active-reading {
+  background: #e8e8e3;
+  border-bottom-color: #98988f;
 }
 
 .line-row:last-child {
@@ -316,6 +322,17 @@ label {
   word-break: break-word;
   font-size: 1rem;
   font-family: "Noto Serif JP", serif;
+}
+
+.line-token {
+  border-radius: 4px;
+  padding: 0 0.02em;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.line-token.active-word {
+  background: #f0d8d8;
+  color: #4a2222;
 }
 
 ruby {

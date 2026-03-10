@@ -39,6 +39,11 @@ let tokenizerPromise = null;
 let cachedVoices = [];
 let processedLines = [];
 let fullPlaybackState = "stopped";
+let fullPlaybackQueue = [];
+let playbackSessionId = 0;
+let activeReadingLineIndex = null;
+let activeWordLineIndex = null;
+let activeWordTokenIndex = null;
 let isExporting = false;
 let isProcessing = false;
 const jlptKanjiCache = new Map();
@@ -67,7 +72,122 @@ function setPlayToggleVisual(state) {
 
 function resetFullPlayback() {
   fullPlaybackState = "stopped";
+  fullPlaybackQueue = [];
   setPlayToggleVisual("stopped");
+}
+
+function clearWordHighlight() {
+  if (activeWordLineIndex === null || activeWordTokenIndex === null) {
+    return;
+  }
+
+  const token = furiganaOutput.querySelector(
+    `.line-row[data-line-index="${activeWordLineIndex}"] .line-token[data-token-index="${activeWordTokenIndex}"]`
+  );
+  if (token) {
+    token.classList.remove("active-word");
+  }
+
+  activeWordLineIndex = null;
+  activeWordTokenIndex = null;
+}
+
+function highlightWordToken(lineIndex, tokenIndex) {
+  if (lineIndex === null || tokenIndex === null) {
+    return;
+  }
+
+  if (activeWordLineIndex === lineIndex && activeWordTokenIndex === tokenIndex) {
+    return;
+  }
+
+  clearWordHighlight();
+
+  const token = furiganaOutput.querySelector(`.line-row[data-line-index="${lineIndex}"] .line-token[data-token-index="${tokenIndex}"]`);
+  if (!token) {
+    return;
+  }
+
+  token.classList.add("active-word");
+  activeWordLineIndex = lineIndex;
+  activeWordTokenIndex = tokenIndex;
+}
+
+function findTokenIndexByChar(lineIndex, charIndex) {
+  const line = processedLines[lineIndex];
+  if (!line || !line.tokenRanges || line.tokenRanges.length === 0) {
+    return null;
+  }
+
+  const direct = line.tokenRanges.find((range) => charIndex >= range.start && charIndex < range.end);
+  if (direct) {
+    return direct.tokenIndex;
+  }
+
+  const nearestNext = line.tokenRanges.find((range) => charIndex < range.end);
+  if (nearestNext) {
+    return nearestNext.tokenIndex;
+  }
+
+  return line.tokenRanges[line.tokenRanges.length - 1].tokenIndex;
+}
+
+function highlightWordByChar(lineIndex, charIndex) {
+  const tokenIndex = findTokenIndexByChar(lineIndex, charIndex);
+  if (tokenIndex === null) {
+    return;
+  }
+
+  highlightWordToken(lineIndex, tokenIndex);
+}
+
+function highlightFirstWord(lineIndex) {
+  const line = processedLines[lineIndex];
+  if (!line || !line.tokenRanges || line.tokenRanges.length === 0) {
+    return;
+  }
+
+  highlightWordToken(lineIndex, line.tokenRanges[0].tokenIndex);
+}
+
+function clearReadingHighlight() {
+  clearWordHighlight();
+
+  if (activeReadingLineIndex === null) {
+    return;
+  }
+
+  const currentRow = furiganaOutput.querySelector(`.line-row[data-line-index="${activeReadingLineIndex}"]`);
+  if (currentRow) {
+    currentRow.classList.remove("active-reading");
+  }
+
+  activeReadingLineIndex = null;
+}
+
+function highlightReadingLine(lineIndex) {
+  clearReadingHighlight();
+  const row = furiganaOutput.querySelector(`.line-row[data-line-index="${lineIndex}"]`);
+  if (!row) {
+    return;
+  }
+
+  row.classList.add("active-reading");
+  row.scrollIntoView({ block: "nearest" });
+  activeReadingLineIndex = lineIndex;
+}
+
+function cancelSpeechAndResetPlayback(clearHighlight = true) {
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
+
+  playbackSessionId += 1;
+  resetFullPlayback();
+
+  if (clearHighlight) {
+    clearReadingHighlight();
+  }
 }
 
 function syncControlStates() {
@@ -368,7 +488,7 @@ function buildUtterance(text) {
   return utterance;
 }
 
-function speakLineOrWord(text) {
+function speakLineOrWord(text, lineIndex = null) {
   const cleanText = text.trim();
   if (!cleanText) {
     setStatus("No text to read.", true);
@@ -380,20 +500,129 @@ function speakLineOrWord(text) {
     return;
   }
 
-  window.speechSynthesis.cancel();
-  resetFullPlayback();
+  cancelSpeechAndResetPlayback(lineIndex === null);
+  const session = playbackSessionId;
 
   const utterance = buildUtterance(cleanText);
-  utterance.onstart = () => setStatus("Playing Japanese voice...");
-  utterance.onend = () => setStatus("Voice playback finished.");
-  utterance.onerror = (event) => setStatus(`Voice playback error: ${event.error}`, true);
+  utterance.onstart = () => {
+    if (session !== playbackSessionId) {
+      return;
+    }
+
+    if (lineIndex !== null) {
+      highlightReadingLine(lineIndex);
+      highlightFirstWord(lineIndex);
+    }
+
+    setStatus("Playing Japanese voice...");
+  };
+  utterance.onboundary = (event) => {
+    if (session !== playbackSessionId || lineIndex === null) {
+      return;
+    }
+
+    if (typeof event.charIndex !== "number") {
+      return;
+    }
+
+    highlightWordByChar(lineIndex, event.charIndex);
+  };
+  utterance.onend = () => {
+    if (session !== playbackSessionId) {
+      return;
+    }
+
+    clearReadingHighlight();
+    setStatus("Voice playback finished.");
+  };
+  utterance.onerror = (event) => {
+    if (session !== playbackSessionId) {
+      return;
+    }
+
+    clearReadingHighlight();
+    setStatus(`Voice playback error: ${event.error}`, true);
+  };
+
+  window.speechSynthesis.speak(utterance);
+}
+
+function buildFullPlaybackQueueFromProcessedLines() {
+  const queue = [];
+
+  for (let i = 0; i < processedLines.length; i += 1) {
+    const line = processedLines[i];
+    if (line.type === "line" && line.raw.trim()) {
+      queue.push({ text: line.raw, lineIndex: i });
+    }
+  }
+
+  return queue;
+}
+
+function playFullQueueFrom(position, session) {
+  if (session !== playbackSessionId) {
+    return;
+  }
+
+  if (position >= fullPlaybackQueue.length) {
+    resetFullPlayback();
+    clearReadingHighlight();
+    setStatus("Full script finished.");
+    return;
+  }
+
+  const item = fullPlaybackQueue[position];
+  const utterance = buildUtterance(item.text);
+
+  utterance.onstart = () => {
+    if (session !== playbackSessionId) {
+      return;
+    }
+
+    fullPlaybackState = "playing";
+    setPlayToggleVisual("playing");
+    highlightReadingLine(item.lineIndex);
+    highlightFirstWord(item.lineIndex);
+    setStatus(`Playing line ${position + 1}/${fullPlaybackQueue.length}...`);
+  };
+
+  utterance.onboundary = (event) => {
+    if (session !== playbackSessionId) {
+      return;
+    }
+
+    if (typeof event.charIndex !== "number") {
+      return;
+    }
+
+    highlightWordByChar(item.lineIndex, event.charIndex);
+  };
+
+  utterance.onend = () => {
+    if (session !== playbackSessionId) {
+      return;
+    }
+
+    playFullQueueFrom(position + 1, session);
+  };
+
+  utterance.onerror = (event) => {
+    if (session !== playbackSessionId) {
+      return;
+    }
+
+    resetFullPlayback();
+    clearReadingHighlight();
+    setStatus(`Voice playback error: ${event.error}`, true);
+  };
 
   window.speechSynthesis.speak(utterance);
 }
 
 function startFullScriptPlayback() {
-  const cleanText = getSourceText().trim();
-  if (!cleanText) {
+  const queue = buildFullPlaybackQueueFromProcessedLines();
+  if (queue.length === 0) {
     setStatus("No text to read.", true);
     return;
   }
@@ -403,26 +632,12 @@ function startFullScriptPlayback() {
     return;
   }
 
-  window.speechSynthesis.cancel();
-
-  const utterance = buildUtterance(cleanText);
-  utterance.onstart = () => {
-    fullPlaybackState = "playing";
-    setPlayToggleVisual("playing");
-    setStatus("Playing full script...");
-  };
-  utterance.onend = () => {
-    resetFullPlayback();
-    setStatus("Full script finished.");
-  };
-  utterance.onerror = (event) => {
-    resetFullPlayback();
-    setStatus(`Voice playback error: ${event.error}`, true);
-  };
-
+  cancelSpeechAndResetPlayback();
+  const session = playbackSessionId;
+  fullPlaybackQueue = queue;
   fullPlaybackState = "playing";
   setPlayToggleVisual("playing");
-  window.speechSynthesis.speak(utterance);
+  playFullQueueFrom(0, session);
 }
 
 function toggleFullPlayback() {
@@ -560,10 +775,12 @@ async function processFurigana() {
   if (!rawText.trim()) {
     setStatus("No input text found. Go back to Input page first.", true);
     furiganaOutput.innerHTML = '<p class="line-text">No source text found.</p>';
+    clearReadingHighlight();
     hideProgress();
     return;
   }
 
+  cancelSpeechAndResetPlayback();
   setProcessingBusy(true);
   setProgress(4, "Preparing text...");
 
@@ -585,16 +802,30 @@ async function processFurigana() {
       const line = lines[i];
       if (!line.trim()) {
         htmlRows.push('<div class="blank"></div>');
-        processedLines.push({ type: "blank", raw: "", segments: [] });
+        processedLines.push({ type: "blank", raw: "", segments: [], tokenRanges: [] });
       } else {
         const tokens = activeTokenizer.tokenize(line);
-        const lineHtml = tokens.map((token) => tokenToRubyHtml(token, level, levelSet)).join("");
+        let cursor = 0;
+        const tokenRanges = [];
+        const lineHtml = tokens
+          .map((token, tokenIndex) => {
+            const tokenHtml = tokenToRubyHtml(token, level, levelSet);
+            const surface = token.surface_form || "";
+            const start = cursor;
+            const end = cursor + surface.length;
+
+            tokenRanges.push({ tokenIndex, start, end });
+            cursor = end;
+
+            return `<span class="line-token" data-token-index="${tokenIndex}">${tokenHtml}</span>`;
+          })
+          .join("");
         const segments = tokens.map((token) => tokenToExportSegment(token, level, levelSet));
 
         htmlRows.push(
-          `<div class="line-row"><button type="button" class="line-speak" data-text="${escapeHtml(line)}" title="Play line" aria-label="Play line">&#x25B6;</button><p class="line-text">${lineHtml}</p></div>`
+          `<div class="line-row" data-line-index="${i}"><button type="button" class="line-speak" data-line-index="${i}" data-text="${escapeHtml(line)}" title="Play line" aria-label="Play line">&#x25B6;</button><p class="line-text">${lineHtml}</p></div>`
         );
-        processedLines.push({ type: "line", raw: line, segments });
+        processedLines.push({ type: "line", raw: line, segments, tokenRanges });
       }
 
       if (i % 25 === 0 || i === lines.length - 1) {
@@ -894,8 +1125,7 @@ voiceSelect.addEventListener("change", () => {
     return;
   }
 
-  window.speechSynthesis.cancel();
-  resetFullPlayback();
+  cancelSpeechAndResetPlayback();
 
   const pickedVoice = pickJapaneseVoice();
   if (!pickedVoice) {
@@ -915,8 +1145,7 @@ speedSelect.addEventListener("change", () => {
     return;
   }
 
-  window.speechSynthesis.cancel();
-  resetFullPlayback();
+  cancelSpeechAndResetPlayback();
   setStatus(`Speed set to ${mode} (x${SPEED_RATE_MAP[mode].toFixed(2)}). Press play to start.`);
 });
 
@@ -958,13 +1187,16 @@ window.addEventListener("keydown", (event) => {
 furiganaOutput.addEventListener("click", (event) => {
   const lineButton = event.target.closest(".line-speak");
   if (lineButton) {
-    speakLineOrWord(lineButton.dataset.text || "");
+    const lineIndex = Number.parseInt(lineButton.dataset.lineIndex || "", 10);
+    speakLineOrWord(lineButton.dataset.text || "", Number.isNaN(lineIndex) ? null : lineIndex);
     return;
   }
 
   const ruby = event.target.closest("ruby");
   if (ruby) {
-    speakLineOrWord(ruby.dataset.speak || ruby.textContent || "");
+    const parentLine = ruby.closest(".line-row");
+    const lineIndex = parentLine ? Number.parseInt(parentLine.dataset.lineIndex || "", 10) : NaN;
+    speakLineOrWord(ruby.dataset.speak || ruby.textContent || "", Number.isNaN(lineIndex) ? null : lineIndex);
   }
 });
 
