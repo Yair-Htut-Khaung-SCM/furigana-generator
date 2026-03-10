@@ -2,6 +2,10 @@ const STORAGE_KEY = "announcerSourceText";
 const KANJI_LEVEL_KEY = "announcerKanjiLevel";
 const VOICE_KEY = "announcerVoiceUri";
 const SPEED_KEY = "announcerSpeechSpeed";
+const FONT_COLOR_KEY = "announcerFontColor";
+const FONT_BOLD_KEY = "announcerFontBold";
+const DEFAULT_FONT_COLOR = "#1f1f1f";
+const FONT_COLOR_PRESETS = ["#1f1f1f", "#b03a3a", "#2f8f4f", "#2f63c9"];
 const SPEED_RATE_MAP = {
   slow: 0.6,
   normal: 1.0,
@@ -25,6 +29,8 @@ const playToggleBtn = document.getElementById("playToggleBtn");
 const levelFilter = document.getElementById("levelFilter");
 const voiceSelect = document.getElementById("voiceSelect");
 const speedSelect = document.getElementById("speedSelect");
+const fontPresetButtons = document.querySelectorAll("[data-font-color]");
+const fontBoldBtn = document.getElementById("fontBoldBtn");
 const statusText = document.getElementById("status");
 const furiganaOutput = document.getElementById("furiganaOutput");
 const progressWrap = document.getElementById("progressWrap");
@@ -238,6 +244,10 @@ function syncControlStates() {
   const hasJapaneseVoices = getJapaneseVoices().length > 0;
   voiceSelect.disabled = isProcessing || isExporting || !hasSpeech || !hasJapaneseVoices;
   speedSelect.disabled = isProcessing || isExporting;
+  for (const swatch of fontPresetButtons) {
+    swatch.disabled = isProcessing || isExporting;
+  }
+  fontBoldBtn.disabled = isProcessing || isExporting;
   exportDocxBtn.disabled = isProcessing || isExporting;
   closeExportModalBtn.disabled = isExporting;
 
@@ -420,6 +430,76 @@ function getSelectedSpeechRate() {
   return SPEED_RATE_MAP[mode] || SPEED_RATE_MAP.normal;
 }
 
+function normalizeHexColor(value) {
+  if (typeof value !== "string") {
+    return DEFAULT_FONT_COLOR;
+  }
+
+  const trimmed = value.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) {
+    return trimmed.toLowerCase();
+  }
+
+  if (/^#[0-9a-fA-F]{3}$/.test(trimmed)) {
+    const [r, g, b] = trimmed.slice(1).split("");
+    return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
+  }
+
+  return DEFAULT_FONT_COLOR;
+}
+
+function getStoredFontColor() {
+  const normalized = normalizeHexColor(localStorage.getItem(FONT_COLOR_KEY) || DEFAULT_FONT_COLOR);
+  return FONT_COLOR_PRESETS.includes(normalized) ? normalized : DEFAULT_FONT_COLOR;
+}
+
+function setStoredFontColor(color) {
+  const normalized = normalizeHexColor(color);
+  const finalColor = FONT_COLOR_PRESETS.includes(normalized) ? normalized : DEFAULT_FONT_COLOR;
+  localStorage.setItem(FONT_COLOR_KEY, finalColor);
+}
+
+function getStoredBoldEnabled() {
+  return localStorage.getItem(FONT_BOLD_KEY) === "1";
+}
+
+function setStoredBoldEnabled(isEnabled) {
+  localStorage.setItem(FONT_BOLD_KEY, isEnabled ? "1" : "0");
+}
+
+function isBoldEnabled() {
+  return fontBoldBtn.getAttribute("aria-pressed") === "true";
+}
+
+function setBoldButtonVisual(isEnabled) {
+  fontBoldBtn.setAttribute("aria-pressed", isEnabled ? "true" : "false");
+}
+
+function getDocxColorHex() {
+  return getStoredFontColor().slice(1).toUpperCase();
+}
+
+function setActiveFontPreset(color) {
+  const normalized = normalizeHexColor(color);
+
+  for (const swatch of fontPresetButtons) {
+    const swatchColor = normalizeHexColor(swatch.dataset.fontColor || DEFAULT_FONT_COLOR);
+    const isActive = swatchColor === normalized;
+    swatch.classList.toggle("active", isActive);
+    swatch.setAttribute("aria-pressed", isActive ? "true" : "false");
+  }
+}
+
+function applyUserFontSettings() {
+  const color = getStoredFontColor();
+  const bold = isBoldEnabled();
+
+  furiganaOutput.style.setProperty("--user-font-color", color);
+  furiganaOutput.style.setProperty("--user-ruby-color", color);
+  furiganaOutput.style.setProperty("--user-font-weight", bold ? "700" : "400");
+  setActiveFontPreset(color);
+}
+
 function getJapaneseVoices() {
   return cachedVoices.filter((voice) => voice.lang && voice.lang.toLowerCase().startsWith("ja"));
 }
@@ -455,6 +535,26 @@ function findHarukaVoice(voices) {
   return voices.find((voice) => (voice.name || "").toLowerCase().includes("haruka")) || null;
 }
 
+function getShortVoiceLabel(voice) {
+  const raw = (voice.name || "").trim();
+  if (!raw) {
+    return "Japanese";
+  }
+
+  const microsoftMatch = raw.match(/^microsoft\s+([^-]+?)(?:\s*-\s*.*)?$/i);
+  if (microsoftMatch && microsoftMatch[1]) {
+    return microsoftMatch[1].trim();
+  }
+
+  const googleMatch = raw.match(/^google\s+(.+)$/i);
+  if (googleMatch && googleMatch[1]) {
+    return googleMatch[1].trim();
+  }
+
+  const dashHead = raw.split(" - ")[0].trim();
+  return dashHead || raw;
+}
+
 function populateVoiceSelect() {
   const japaneseVoices = getJapaneseVoices();
   const sorted = [...japaneseVoices].sort((a, b) => rankVoice(b) - rankVoice(a));
@@ -470,10 +570,17 @@ function populateVoiceSelect() {
     return;
   }
 
+  const nameCount = new Map();
   for (const voice of sorted) {
+    const short = getShortVoiceLabel(voice);
+    nameCount.set(short, (nameCount.get(short) || 0) + 1);
+  }
+
+  for (const voice of sorted) {
+    const short = getShortVoiceLabel(voice);
     const option = document.createElement("option");
     option.value = voice.voiceURI;
-    option.textContent = `${voice.name} (${voice.lang})`;
+    option.textContent = nameCount.get(short) > 1 ? `${short} (${voice.lang})` : short;
     voiceSelect.appendChild(option);
   }
 
@@ -906,6 +1013,13 @@ async function processFurigana() {
 }
 
 function segmentToWordXml(segment) {
+  const colorHex = getDocxColorHex();
+  const boldXml = getStoredBoldEnabled() ? "<w:b/>" : "";
+  const baseRunProps =
+    `<w:rPr><w:rFonts w:eastAsia="Yu Mincho"/>${boldXml}<w:color w:val="${colorHex}"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>`;
+  const rubyRunProps =
+    `<w:rPr><w:rFonts w:eastAsia="Yu Mincho"/>${boldXml}<w:color w:val="${colorHex}"/><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr>`;
+
   if (segment.kind === "ruby") {
     return (
       `<w:ruby>` +
@@ -918,13 +1032,13 @@ function segmentToWordXml(segment) {
       `</w:rubyPr>` +
       `<w:rt>` +
       `<w:r>` +
-      `<w:rPr><w:rFonts w:eastAsia="Yu Mincho"/><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr>` +
+      rubyRunProps +
       `<w:t>${escapeXml(segment.reading)}</w:t>` +
       `</w:r>` +
       `</w:rt>` +
       `<w:rubyBase>` +
       `<w:r>` +
-      `<w:rPr><w:rFonts w:eastAsia="Yu Mincho"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>` +
+      baseRunProps +
       `<w:t>${escapeXml(segment.base)}</w:t>` +
       `</w:r>` +
       `</w:rubyBase>` +
@@ -934,7 +1048,7 @@ function segmentToWordXml(segment) {
 
   return (
     `<w:r>` +
-    `<w:rPr><w:rFonts w:eastAsia="Yu Mincho"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>` +
+    baseRunProps +
     `<w:t xml:space="preserve">${escapeXml(segment.text)}</w:t>` +
     `</w:r>`
   );
@@ -987,6 +1101,9 @@ function buildRootRelsXml() {
 }
 
 function createExportRenderRoot() {
+  const fontColor = getStoredFontColor();
+  const fontWeight = getStoredBoldEnabled() ? "700" : "400";
+
   const mount = document.createElement("div");
   mount.style.position = "fixed";
   mount.style.left = "-10000px";
@@ -997,7 +1114,8 @@ function createExportRenderRoot() {
   const page = document.createElement("div");
   page.style.width = "100%";
   page.style.background = "#ffffff";
-  page.style.color = "#171717";
+  page.style.color = fontColor;
+  page.style.fontWeight = fontWeight;
   page.style.padding = "56px 64px";
   page.style.fontFamily = '"Noto Serif JP", serif';
   page.style.fontSize = "26px";
@@ -1022,7 +1140,7 @@ function createExportRenderRoot() {
         const rt = document.createElement("rt");
         rt.textContent = segment.reading;
         rt.style.fontSize = "0.5em";
-        rt.style.color = "#2e2e2e";
+        rt.style.color = fontColor;
 
         ruby.appendChild(rt);
         paragraph.appendChild(ruby);
@@ -1189,7 +1307,7 @@ voiceSelect.addEventListener("change", () => {
     return;
   }
 
-  setStatus(`Voice selected: ${pickedVoice.name}. Press play to start.`);
+  setStatus(`Voice selected: ${getShortVoiceLabel(pickedVoice)}. Press play to start.`);
 });
 
 speedSelect.addEventListener("change", () => {
@@ -1203,6 +1321,23 @@ speedSelect.addEventListener("change", () => {
 
   cancelSpeechAndResetPlayback();
   setStatus(`Speed set to ${mode} (x${SPEED_RATE_MAP[mode].toFixed(2)}). Press play to start.`);
+});
+
+for (const swatch of fontPresetButtons) {
+  swatch.addEventListener("click", () => {
+    const color = normalizeHexColor(swatch.dataset.fontColor || DEFAULT_FONT_COLOR);
+    setStoredFontColor(color);
+    applyUserFontSettings();
+    setStatus("Font color updated.");
+  });
+}
+
+fontBoldBtn.addEventListener("click", () => {
+  const nextBold = !isBoldEnabled();
+  setBoldButtonVisual(nextBold);
+  setStoredBoldEnabled(nextBold);
+  applyUserFontSettings();
+  setStatus(nextBold ? "Bold text enabled." : "Bold text disabled.");
 });
 
 closeExportModalBtn.addEventListener("click", closeExportModal);
@@ -1265,6 +1400,8 @@ if ("speechSynthesis" in window) {
 
 levelFilter.value = localStorage.getItem(KANJI_LEVEL_KEY) || "all";
 speedSelect.value = getStoredSpeedMode();
+setBoldButtonVisual(getStoredBoldEnabled());
+applyUserFontSettings();
 setPlayToggleVisual("stopped");
 syncControlStates();
 processFurigana();

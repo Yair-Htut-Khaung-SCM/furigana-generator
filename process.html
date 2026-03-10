@@ -39,18 +39,28 @@
             <option value="">Loading voices...</option>
           </select>
           <select id="speedSelect" class="level-select" aria-label="Select speech speed">
-            <option value="slow">Speed: Slow (x0.60)</option>
-            <option value="normal" selected>Speed: Normal (x1.00)</option>
-            <option value="fast">Speed: Fast (x1.45)</option>
+            <option value="slow">Slow</option>
+            <option value="normal" selected>Normal</option>
+            <option value="fast">Fast</option>
           </select>
         </div>
       </header>
 
       <section class="panel process-panel">
         <div class="output-head">
-          <div>
+          <div class="output-left">
             <h2>Furigana Generator / Process View</h2>
             <p>Click any Play button or ruby word for pronunciation. JLPT filter applies to furigana output.</p>
+            <div class="text-style-tools" aria-label="Text style controls">
+              <button type="button" class="swatch-btn" data-font-color="#1f1f1f" aria-label="Use black text color" title="Black"></button>
+              <button type="button" class="swatch-btn" data-font-color="#b03a3a" aria-label="Use red text color" title="Red"></button>
+              <button type="button" class="swatch-btn" data-font-color="#2f8f4f" aria-label="Use green text color" title="Green"></button>
+              <button type="button" class="swatch-btn" data-font-color="#2f63c9" aria-label="Use blue text color" title="Blue"></button>
+              <button id="fontBoldBtn" class="btn icon-btn" type="button" title="Toggle bold" aria-label="Toggle bold text" aria-pressed="false">
+                <span aria-hidden="true">B</span>
+                <span class="sr-only">Toggle bold text</span>
+              </button>
+            </div>
           </div>
           <p id="status" class="status">Ready.</p>
         </div>

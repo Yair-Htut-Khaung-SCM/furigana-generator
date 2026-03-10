@@ -5,6 +5,7 @@ const sourceText = document.getElementById("sourceText");
 const kanjiLevelSelect = document.getElementById("kanjiLevelSelect");
 const openProcessBtn = document.getElementById("openProcessBtn");
 const clearBtn = document.getElementById("clearBtn");
+const charCount = document.getElementById("charCount");
 const statusText = document.getElementById("status");
 
 function setStatus(message, isError = false) {
@@ -23,6 +24,7 @@ function saveKanjiLevel() {
 function updateLiveStatus() {
   const length = sourceText.value.length;
   const level = (kanjiLevelSelect.value || "all").toUpperCase();
+  charCount.textContent = `Characters: ${length}`;
   setStatus(`Saved. ${length} characters ready. Kanji filter: ${level}.`);
 }
 

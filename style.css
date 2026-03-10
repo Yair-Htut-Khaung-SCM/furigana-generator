@@ -189,6 +189,12 @@ label {
   font-size: 0.92rem;
 }
 
+.char-count {
+  margin: 0.7rem 0 0;
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+}
+
 .status.error {
   color: var(--ink-strong);
   font-weight: 700;
@@ -225,11 +231,18 @@ label {
 }
 
 #voiceSelect {
-  min-width: 9.6rem;
+  min-width: 7rem;
 }
 
 #speedSelect {
-  min-width: 8.1rem;
+  min-width: 6.8rem;
+}
+
+#fontBoldBtn {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 0.95rem;
+  width: 1.9rem;
+  height: 1.9rem;
 }
 
 .process-panel {
@@ -245,6 +258,49 @@ label {
   justify-content: space-between;
   gap: 0.55rem;
   margin-bottom: 0.55rem;
+}
+
+.output-left {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.text-style-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.swatch-btn {
+  width: 1.45rem;
+  height: 1.45rem;
+  border: 1px solid var(--ink-strong);
+  border-radius: 999px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.swatch-btn[data-font-color="#1f1f1f"] {
+  background: #1f1f1f;
+}
+
+.swatch-btn[data-font-color="#b03a3a"] {
+  background: #b03a3a;
+}
+
+.swatch-btn[data-font-color="#2f8f4f"] {
+  background: #2f8f4f;
+}
+
+.swatch-btn[data-font-color="#2f63c9"] {
+  background: #2f63c9;
+}
+
+.swatch-btn.active,
+.swatch-btn:focus-visible {
+  outline: 2px solid #f6f6f3;
+  outline-offset: 1px;
+  box-shadow: 0 0 0 2px #2f2f2a;
 }
 
 .output-head h2 {
@@ -345,6 +401,8 @@ label {
   word-break: break-word;
   font-size: 1rem;
   font-family: "Noto Serif JP", serif;
+  color: var(--user-font-color, var(--ink));
+  font-weight: var(--user-font-weight, 400);
 }
 
 .line-token {
@@ -364,7 +422,7 @@ ruby {
 
 rt {
   font-size: 0.62rem;
-  color: #3b3b36;
+  color: var(--user-ruby-color, #3b3b36);
 }
 
 .blank {
@@ -453,6 +511,10 @@ rt {
 
   .modal-options {
     grid-template-columns: 1fr;
+  }
+
+  .text-style-tools {
+    flex-wrap: wrap;
   }
 
   .level-label {
