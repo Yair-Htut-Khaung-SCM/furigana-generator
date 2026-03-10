@@ -1,5 +1,12 @@
 const STORAGE_KEY = "announcerSourceText";
 const KANJI_LEVEL_KEY = "announcerKanjiLevel";
+const VOICE_KEY = "announcerVoiceUri";
+const SPEED_KEY = "announcerSpeechSpeed";
+const SPEED_RATE_MAP = {
+  slow: 0.6,
+  normal: 1.0,
+  fast: 1.45
+};
 const KUROMOJI_DIC = "https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/";
 const JLPT_KANJI_URL = {
   n4: "https://unpkg.com/kanji-data@1.1.0/data/lists/jlpt-4.json",
@@ -12,8 +19,13 @@ const JLPT_LEVEL_ORDER = ["n4", "n3", "n2", "n1"];
 const exportDocxBtn = document.getElementById("exportDocxBtn");
 const playToggleBtn = document.getElementById("playToggleBtn");
 const levelFilter = document.getElementById("levelFilter");
+const voiceSelect = document.getElementById("voiceSelect");
+const speedSelect = document.getElementById("speedSelect");
 const statusText = document.getElementById("status");
 const furiganaOutput = document.getElementById("furiganaOutput");
+const progressWrap = document.getElementById("progressWrap");
+const progressFill = document.getElementById("progressFill");
+const progressLabel = document.getElementById("progressLabel");
 const exportModal = document.getElementById("exportModal");
 const closeExportModalBtn = document.getElementById("closeExportModalBtn");
 const exportOptionButtons = document.querySelectorAll("[data-export-type]");
@@ -24,6 +36,7 @@ let cachedVoices = [];
 let processedLines = [];
 let fullPlaybackState = "stopped";
 let isExporting = false;
+let isProcessing = false;
 const jlptKanjiCache = new Map();
 
 furiganaOutput.innerHTML = "<p class=\"line-text\">Processed lines will appear here.</p>";
@@ -53,17 +66,44 @@ function resetFullPlayback() {
   setPlayToggleVisual("stopped");
 }
 
-function setExportBusy(busy) {
-  isExporting = busy;
-  exportDocxBtn.disabled = busy;
-  closeExportModalBtn.disabled = busy;
+function syncControlStates() {
+  playToggleBtn.disabled = isProcessing;
+  levelFilter.disabled = isProcessing || isExporting;
+  const hasSpeech = "speechSynthesis" in window;
+  const hasJapaneseVoices = getJapaneseVoices().length > 0;
+  voiceSelect.disabled = isProcessing || isExporting || !hasSpeech || !hasJapaneseVoices;
+  speedSelect.disabled = isProcessing || isExporting;
+  exportDocxBtn.disabled = isProcessing || isExporting;
+  closeExportModalBtn.disabled = isExporting;
+
   for (const optionBtn of exportOptionButtons) {
-    optionBtn.disabled = busy;
+    optionBtn.disabled = isProcessing || isExporting;
   }
 }
 
+function setProcessingBusy(busy) {
+  isProcessing = busy;
+  syncControlStates();
+}
+
+function setProgress(percent, label) {
+  const clamped = Math.max(0, Math.min(100, percent));
+  progressWrap.classList.add("active");
+  progressFill.style.width = `${clamped}%`;
+  progressLabel.textContent = label;
+}
+
+function hideProgress() {
+  progressWrap.classList.remove("active");
+}
+
+function setExportBusy(busy) {
+  isExporting = busy;
+  syncControlStates();
+}
+
 function openExportModal() {
-  if (isExporting) {
+  if (isExporting || isProcessing) {
     return;
   }
 
@@ -192,26 +232,119 @@ function getLevelRangeLabel(level) {
   return `${level.toUpperCase()}-N1`;
 }
 
+function getStoredVoiceUri() {
+  return localStorage.getItem(VOICE_KEY) || "auto";
+}
+
+function setStoredVoiceUri(voiceUri) {
+  localStorage.setItem(VOICE_KEY, voiceUri);
+}
+
+function getStoredSpeedMode() {
+  const mode = localStorage.getItem(SPEED_KEY) || "normal";
+  return Object.prototype.hasOwnProperty.call(SPEED_RATE_MAP, mode) ? mode : "normal";
+}
+
+function setStoredSpeedMode(mode) {
+  localStorage.setItem(SPEED_KEY, mode);
+}
+
+function getSelectedSpeechRate() {
+  const mode = speedSelect.value;
+  return SPEED_RATE_MAP[mode] || SPEED_RATE_MAP.normal;
+}
+
+function getJapaneseVoices() {
+  return cachedVoices.filter((voice) => voice.lang && voice.lang.toLowerCase().startsWith("ja"));
+}
+
+function rankVoice(voice) {
+  const name = (voice.name || "").toLowerCase();
+  const lang = (voice.lang || "").toLowerCase();
+  let score = 0;
+
+  if (lang === "ja-jp") {
+    score += 40;
+  }
+  if (name.includes("microsoft")) {
+    score += 150;
+  }
+  if (name.includes("google")) {
+    score += 120;
+  }
+  if (name.includes("neural") || name.includes("natural")) {
+    score += 80;
+  }
+  if (voice.localService) {
+    score += 12;
+  }
+  if (name.includes("espeak") || name.includes("festival") || name.includes("mbrola")) {
+    score -= 180;
+  }
+
+  return score;
+}
+
+function populateVoiceSelect() {
+  const japaneseVoices = getJapaneseVoices();
+  const sorted = [...japaneseVoices].sort((a, b) => rankVoice(b) - rankVoice(a));
+  const preferred = getStoredVoiceUri();
+
+  voiceSelect.innerHTML = "";
+
+  const autoOption = document.createElement("option");
+  autoOption.value = "auto";
+  autoOption.textContent = "Voice: Auto";
+  voiceSelect.appendChild(autoOption);
+
+  for (const voice of sorted) {
+    const option = document.createElement("option");
+    option.value = voice.voiceURI;
+    option.textContent = `${voice.name} (${voice.lang})`;
+    voiceSelect.appendChild(option);
+  }
+
+  if (preferred !== "auto" && sorted.some((voice) => voice.voiceURI === preferred)) {
+    voiceSelect.value = preferred;
+    return;
+  }
+
+  voiceSelect.value = "auto";
+}
+
 function loadVoices() {
   if (!("speechSynthesis" in window)) {
     return;
   }
   cachedVoices = window.speechSynthesis.getVoices();
+  populateVoiceSelect();
+  syncControlStates();
 }
 
 function pickJapaneseVoice() {
-  const japaneseVoices = cachedVoices.filter((voice) => voice.lang.toLowerCase().startsWith("ja"));
+  const japaneseVoices = getJapaneseVoices();
   if (japaneseVoices.length === 0) {
     return null;
   }
-  return japaneseVoices.find((voice) => voice.localService) || japaneseVoices[0];
+
+  const selectedUri = voiceSelect.value || "auto";
+  if (selectedUri !== "auto") {
+    const chosenVoice = japaneseVoices.find((voice) => voice.voiceURI === selectedUri);
+    if (chosenVoice) {
+      return chosenVoice;
+    }
+  }
+
+  const sorted = [...japaneseVoices].sort((a, b) => rankVoice(b) - rankVoice(a));
+  return sorted[0];
 }
 
 function buildUtterance(text) {
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = "ja-JP";
-  utterance.rate = 0.95;
+  utterance.rate = getSelectedSpeechRate();
   utterance.pitch = 1;
+  utterance.volume = 1;
 
   const jpVoice = pickJapaneseVoice();
   if (jpVoice) {
@@ -282,6 +415,14 @@ function toggleFullPlayback() {
   if (!("speechSynthesis" in window)) {
     setStatus("Speech synthesis is not supported in this browser.", true);
     return;
+  }
+
+  if (fullPlaybackState === "playing" && !window.speechSynthesis.speaking) {
+    resetFullPlayback();
+  }
+
+  if (fullPlaybackState === "paused" && !window.speechSynthesis.paused) {
+    resetFullPlayback();
   }
 
   if (fullPlaybackState === "playing" && window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
@@ -390,38 +531,61 @@ async function processFurigana() {
   if (!rawText.trim()) {
     setStatus("No input text found. Go back to Input page first.", true);
     furiganaOutput.innerHTML = '<p class="line-text">No source text found.</p>';
+    hideProgress();
     return;
   }
 
+  setProcessingBusy(true);
+  setProgress(4, "Preparing text...");
+
   try {
+    setProgress(12, "Loading Japanese dictionary...");
     const activeTokenizer = await buildTokenizer();
+
     const level = getSelectedLevel();
+    setProgress(22, `Loading JLPT ${getLevelRangeLabel(level)} filter...`);
     const levelSet = await getLevelKanjiSet(level);
+
     const lines = rawText.split("\n");
     const htmlRows = [];
     processedLines = [];
 
-    for (const line of lines) {
+    setProgress(30, `Processing 0/${lines.length} lines...`);
+
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = lines[i];
       if (!line.trim()) {
         htmlRows.push('<div class="blank"></div>');
         processedLines.push({ type: "blank", raw: "", segments: [] });
-        continue;
+      } else {
+        const tokens = activeTokenizer.tokenize(line);
+        const lineHtml = tokens.map((token) => tokenToRubyHtml(token, level, levelSet)).join("");
+        const segments = tokens.map((token) => tokenToExportSegment(token, level, levelSet));
+
+        htmlRows.push(
+          `<div class="line-row"><button type="button" class="line-speak" data-text="${escapeHtml(line)}" title="Play line" aria-label="Play line">&#x25B6;</button><p class="line-text">${lineHtml}</p></div>`
+        );
+        processedLines.push({ type: "line", raw: line, segments });
       }
 
-      const tokens = activeTokenizer.tokenize(line);
-      const lineHtml = tokens.map((token) => tokenToRubyHtml(token, level, levelSet)).join("");
-      const segments = tokens.map((token) => tokenToExportSegment(token, level, levelSet));
-
-      htmlRows.push(
-        `<div class="line-row"><button type="button" class="line-speak" data-text="${escapeHtml(line)}" title="Play line" aria-label="Play line">&#x25B6;</button><p class="line-text">${lineHtml}</p></div>`
-      );
-      processedLines.push({ type: "line", raw: line, segments });
+      if (i % 25 === 0 || i === lines.length - 1) {
+        const progress = 30 + Math.round(((i + 1) / lines.length) * 65);
+        setProgress(progress, `Processing ${i + 1}/${lines.length} lines...`);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
     }
 
     furiganaOutput.innerHTML = htmlRows.join("");
+    setProgress(100, "Done.");
     setStatus(`Loaded ${lines.length} line(s). Furigana level: ${getLevelRangeLabel(level)}.`);
+    setTimeout(() => {
+      hideProgress();
+    }, 350);
   } catch (error) {
+    hideProgress();
     setStatus(`Could not process furigana: ${error.message || error}`, true);
+  } finally {
+    setProcessingBusy(false);
   }
 }
 
@@ -694,6 +858,44 @@ levelFilter.addEventListener("change", async () => {
   await processFurigana();
 });
 
+voiceSelect.addEventListener("change", () => {
+  setStoredVoiceUri(voiceSelect.value || "auto");
+
+  if (!("speechSynthesis" in window)) {
+    return;
+  }
+
+  window.speechSynthesis.cancel();
+  resetFullPlayback();
+
+  const pickedVoice = pickJapaneseVoice();
+  if (!pickedVoice) {
+    setStatus("No Japanese voice found in this browser.", true);
+    return;
+  }
+
+  if (voiceSelect.value === "auto") {
+    setStatus(`Voice auto-selected: ${pickedVoice.name}. Press play to start.`);
+    return;
+  }
+
+  setStatus(`Voice selected: ${pickedVoice.name}. Press play to start.`);
+});
+
+speedSelect.addEventListener("change", () => {
+  const mode = Object.prototype.hasOwnProperty.call(SPEED_RATE_MAP, speedSelect.value) ? speedSelect.value : "normal";
+  speedSelect.value = mode;
+  setStoredSpeedMode(mode);
+
+  if (!("speechSynthesis" in window)) {
+    return;
+  }
+
+  window.speechSynthesis.cancel();
+  resetFullPlayback();
+  setStatus(`Speed set to ${mode} (x${SPEED_RATE_MAP[mode].toFixed(2)}). Press play to start.`);
+});
+
 closeExportModalBtn.addEventListener("click", closeExportModal);
 
 for (const optionBtn of exportOptionButtons) {
@@ -745,8 +947,12 @@ furiganaOutput.addEventListener("click", (event) => {
 if ("speechSynthesis" in window) {
   loadVoices();
   window.speechSynthesis.onvoiceschanged = loadVoices;
+} else {
+  voiceSelect.disabled = true;
 }
 
 levelFilter.value = localStorage.getItem(KANJI_LEVEL_KEY) || "all";
+speedSelect.value = getStoredSpeedMode();
 setPlayToggleVisual("stopped");
+syncControlStates();
 processFurigana();

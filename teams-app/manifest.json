@@ -5,10 +5,10 @@
   "id": "8b0f3f2d-1a9d-4f84-8650-f9ab7887f65d",
   "packageName": "com.example.furigana.generator",
   "developer": {
-    "name": "Your Company",
-    "websiteUrl": "https://YOUR_GITHUB_USERNAME.github.io/furigana-generator/",
-    "privacyUrl": "https://YOUR_GITHUB_USERNAME.github.io/furigana-generator/privacy.html",
-    "termsOfUseUrl": "https://YOUR_GITHUB_USERNAME.github.io/furigana-generator/terms.html"
+    "name": "Furigana Generator",
+    "websiteUrl": "https://yair-htut-khaung-scm.github.io/furigana-generator/",
+    "privacyUrl": "https://yair-htut-khaung-scm.github.io/furigana-generator/privacy.html",
+    "termsOfUseUrl": "https://yair-htut-khaung-scm.github.io/furigana-generator/terms.html"
   },
   "name": {
     "short": "FuriganaGen",
@@ -27,8 +27,8 @@
     {
       "entityId": "furigana-generator-home",
       "name": "Furigana Generator",
-      "contentUrl": "https://YOUR_GITHUB_USERNAME.github.io/furigana-generator/index.html",
-      "websiteUrl": "https://YOUR_GITHUB_USERNAME.github.io/furigana-generator/index.html",
+      "contentUrl": "https://yair-htut-khaung-scm.github.io/furigana-generator/index.html",
+      "websiteUrl": "https://yair-htut-khaung-scm.github.io/furigana-generator/index.html",
       "scopes": [
         "personal"
       ]
